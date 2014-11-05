@@ -1,0 +1,2 @@
+Scripts help to deploy web configurations for new user at some dev server. Equal projects are separated by ip adderess.
+It is possible to put user into jail or chrooted directory.

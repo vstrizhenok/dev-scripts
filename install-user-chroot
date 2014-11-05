@@ -1,0 +1,60 @@
+#!/bin/bash
+
+USER=$1
+if [ -z $USER ]; then
+	echo "Usage: <username>"
+	exit
+fi
+
+CMDS="/bin/ls /bin/mkdir /bin/mv /bin/rmdir /bin/su /bin/bash /bin/sh /usr/bin/whoami"
+USR_CMDS="/usr/bin/groups /usr/bin/id /usr/bin/rsync /usr/bin/ssh /usr/bin/dircolors /usr/bin/less"
+
+USER_CHROOT="/chroot/${USER}"
+USER_HOME_PATH="${USER_CHROOT}/home/${USER}"
+
+mkdir -p "${USER_CHROOT}"
+mkdir -p "${USER_CHROOT}/"{dev,etc,lib,lib64,usr,bin,home}
+mkdir -p "${USER_CHROOT}/usr/bin"
+chown root:root "${USER_CHROOT}"
+
+[ -r "${USER_CHROOT}/dev/null" ] || mknod -m 666 "${USER_CHROOT}/dev/null" c 1 3
+[ -r "${USER_CHROOT}/dev/urandom" ] || mknod -m 666 "${USER_CHROOT}/dev/urandom" c 1 9
+[ -r "${USER_CHROOT}/dev/zero" ] || mknod -m 666 "${USER_CHROOT}/dev/zero" c 1 5
+[ -r "${USER_CHROOT}/dev/tty" ] || mknod -m 666 "${USER_CHROOT}/dev/tty" c 5 0
+
+cd "${USER_CHROOT}/etc"
+cp /etc/ld.so.cache .
+cp /etc/ld.so.conf .
+cp /etc/nsswitch.conf .
+cp /etc/hosts .
+cp /etc/hostname .
+cp /etc/bash.bashrc .
+cp /etc/passwd .
+cp /etc/group .
+
+mkdir -p "${USER_CHROOT}/lib"
+cd "${USER_CHROOT}/lib"
+cp -Rf /lib/x86_64-linux-gnu .
+
+cd "${USER_CHROOT}/lib64"
+cp /lib64/ld-linux-x86-64.so.2 .
+
+cd "${USER_CHROOT}/bin"
+for cmd in $CMDS; do
+	cp "${cmd}" .
+	l2chroot "${USER_CHROOT}" "${cmd}"
+done
+
+cd "${USER_CHROOT}/usr/bin"
+for cmd in $USR_CMDS; do
+	cp "${cmd}" .
+        l2chroot "${USER_CHROOT}" "${cmd}"
+done
+
+if [ -z "${USER_HOME_PATH}" ]; then
+	mkdir -p "${USER_HOME_PATH}"
+	cp -Rf "/home/${USER}" "${USER_HOME_PATH}"
+	chown -Rf "${USER}:" "${USER_HOME_PATH}"
+fi
+
+usermod -a -G sshusers "${USER}"
