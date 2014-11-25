@@ -8,6 +8,7 @@ import sys, getopt, os
 ### configure nginx
 user = ""
 user_home_path = ""
+user_bashrc = ".bashrc"
 user_log_path = "/log"
 user_web_path = "/web"
 
@@ -99,6 +100,7 @@ def configure_web():
 def configure_user():
 	os.system("useradd -g www-data -m -s " + bash_path + " " + user)
 	os.system("chown -Rf " + user + ": " + user_home_path)
+	os.system("echo \"umask 0007\" >> " + user_home_path + "/" + user_bashrc)
 
 def configure_nginx():
 	mkdir(user_log_path)
