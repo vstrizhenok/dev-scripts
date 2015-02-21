@@ -3,11 +3,12 @@
 from os import listdir
 from os.path import isfile
 
-import sys, getopt, os
+import sys, getopt, os, random
 
 ### configure nginx
 user = ""
 user_home_path = ""
+user_pass_len = 8
 user_bashrc = ".bashrc"
 user_log_path = "/log"
 user_web_path = "/web"
@@ -17,12 +18,16 @@ bash_path = "/bin/bash"
 server_ip = ""
 server_port = "80"
 
+mysql_user = "root"
+mysql_pass = ""
+
 nginx_server_listen = ""
+nginx_server_root_domain = "by"
 nginx_sites_available_path = "/etc/nginx/sites-available.users/default"
 nginx_sites_enabled_path = "/etc/nginx/sites-enabled.users"
 nginx_user_sites_enabled_path = ""
 
-web_source_path = "/home/pvoid/web"
+web_source_path = "/var/www/vhosts"
 
 def main(argv):
         if len(argv) < 1 :
@@ -35,19 +40,20 @@ def main(argv):
 	opts = []
 	args = []
 	try:
-		opts, args = getopt.getopt(argv, "c:b:", [ "configure=", "base-path=" ])
+		opts, args = getopt.getopt(argv, "c:b:", [ "configure=", "base-path=", "root-domain=" ])
 	except getopt.GetoptError as e:
 		print str(e)
 		display_help()
 		sys.exit(2)
 
-	global user_home_path
+	global user_home_path, nginx_server_root_domain
 
 	configure = None
 	user_home_path = None
 	for opt, value in opts:		
 		if opt == "-c" or opt == "--configure": configure = value
 		elif opt == "-b" or opt == "--base-path": user_home_path = value
+		elif opt == "--root-domain": nginx_server_root_domain = value
 
 	if configure is None or len(configure) <= 0:
 		print "configuration is not set. will be used `all` by default"	
@@ -68,14 +74,39 @@ def main(argv):
 
 def configure_all():
 	configure_user()
+	configure_mysql()
 	configure_web()
 	configure_nginx()
 
 def display_help():
         print "Usage: <username> <server_ip>"
 	print "Options:"
-	print "-c, --configure - configuration tasks. Available values: user, web, nginx, all"
+	print "-c, --configure - configuration tasks. Available values: user, web, nginx, mysql, all"
+	print "--root-domain=<some-root-domain>"
         sys.exit(2)
+
+def configure_mysql():
+	password=generate_pass()
+	os.system("mysql -u" + mysql_user + " --password=" + mysql_pass
+		+ " -e \"CREATE USER '" + user + "'@'localhost' IDENTIFIED BY '" + password + "'\"")
+	print "="*10
+	print "Your db name is " + user
+	print "Your pass is " + password
+	print "="*10
+
+def generate_pass():
+	digits = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
+        spec = ['@', '!', '#', '$', '%', '^', '&', '*', '(', ')', '-', '+']
+        symbols = ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'z', 'x', 'c',
+'v', 'b', 'n', 'm']
+        def upper(char): return char.upper()
+        symbols += map(upper, symbols) + digits + spec
+
+        password = []
+        for i in range(user_pass_len):
+                password.append(random.choice(symbols))
+        password = ''.join(password)
+	return password
 
 def init_variables(l_user, l_server_ip):
         global user, server_ip, nginx_server_listen, nginx_user_sites_enabled_path
@@ -100,12 +131,13 @@ def configure_web():
 def configure_user():
 	os.system("useradd -g www-data -m -s " + bash_path + " " + user)
 	os.system("chown -Rf " + user + ": " + user_home_path)
-	os.system("echo \"umask 0007\" >> " + user_home_path + "/" + user_bashrc)
+#	os.system("echo \"umask 0007\" >> " + user_home_path + "/" + user_bashrc)
 
 def configure_nginx():
 	mkdir(user_log_path)
 	nginx_log_path = user_log_path + "/nginx"
 	mkdir(nginx_log_path)
+	mkdir(nginx_sites_enabled_path)
 
 	mkdir(user_web_path)
 	mkdir(nginx_user_sites_enabled_path)
@@ -123,7 +155,7 @@ def configure_nginx_file(file):
 	with open(src_file) as f:
 		content = f.read()
 
-	replaces = [ ("SERVER_LISTEN", nginx_server_listen), ("SERVER_IP", server_ip), ("SERVER_PORT", server_port), ("USER_HOME_PATH", user_home_path), ("USERNAME", user) ]
+	replaces = [ ("ROOT_DOMAIN", nginx_server_root_domain), ("SERVER_LISTEN", nginx_server_listen), ("SERVER_IP", server_ip), ("SERVER_PORT", server_port), ("USER_HOME_PATH", user_home_path), ("USERNAME", user) ]
 	for needle, replacement in replaces:
 		content = content.replace("{{" + needle + "}}", replacement)
 
